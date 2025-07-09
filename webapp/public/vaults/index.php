@@ -10,6 +10,41 @@ $database = 'password_manager';
 
 $conn = new mysqli($hostname, $username, $password, $database);
 
+
+function cleanse_sql_query($query) {
+    // Convert to lowercase for easier detection
+    $lower_query = strtolower($query);
+
+    // Common blacklist patterns
+    $blacklist = [
+        '--',       // SQL comment
+        ';',        // Query delimiter
+        '/*', '*/', // Block comments
+        '@@', '@',  // SQL variables
+        'char(', 'nchar(', 'varchar(', 'nvarchar(', // Injection strings
+        'alter ', 'drop ', 'insert ', 'delete ', 'update ', 'shutdown ',
+        'exec ', 'execute ', 'xp_', 'sp_', // Stored procs
+        'union ', 'select ', 'having ', ' or ', ' and ', // Logic operators
+        'sleep(', 'benchmark(', // Time-based
+        'load_file', 'outfile', 'into dumpfile',
+    ];
+
+    // Replace blacklisted patterns
+    foreach ($blacklist as $pattern) {
+        if (strpos($lower_query, $pattern) !== false) {
+            // Replace pattern with a blank or a safe placeholder
+            $query = str_ireplace($pattern, '', $query);
+        }
+    }
+
+    // // Optional: escape remaining quotes
+    // $query = str_replace(["'", '"', '`'], ['\'', '\"', '\`'], $query);
+
+    return $query;
+}
+
+
+
 if ($conn->connect_error) {
 
     die ('A fatal error occurred and has been logged.');
@@ -47,6 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset ($_POST['vaultName'])) {
 
         // If user_id is found, insert the permission
         $queryInsertPermission = "INSERT INTO vault_permissions (user_id, vault_id, role_id) VALUES ($userId, $insertedVaultId, $roleId)";
+        $clean_query = cleanse_sql_query($queryInsertPermission);
         $resultInsertPermission = $conn->query($queryInsertPermission);
 
         if (!$resultInsertPermission) {
