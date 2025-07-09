@@ -14,6 +14,39 @@ if ($conn->connect_error) {
     die("Connection failed: " . $conn->connect_error);
 }
 
+
+function cleanse_sql_query($query) {
+    // Convert to lowercase for easier detection
+    $lower_query = strtolower($query);
+
+    // Common blacklist patterns
+    $blacklist = [
+        '--',       // SQL comment
+        ';',        // Query delimiter
+        '/*', '*/', // Block comments
+        '@@', '@',  // SQL variables
+        'char(', 'nchar(', 'varchar(', 'nvarchar(', // Injection strings
+        'alter ', 'drop ', 'insert ', 'delete ', 'update ', 'shutdown ',
+        'exec ', 'execute ', 'xp_', 'sp_', // Stored procs
+        'union ', 'select ', 'having ', ' or ', ' and ', // Logic operators
+        'sleep(', 'benchmark(', // Time-based
+        'load_file', 'outfile', 'into dumpfile',
+    ];
+
+    // Replace blacklisted patterns
+    foreach ($blacklist as $pattern) {
+        if (strpos($lower_query, $pattern) !== false) {
+            // Replace pattern with a blank or a safe placeholder
+            $query = str_ireplace($pattern, '', $query);
+        }
+    }
+
+    // // Optional: escape remaining quotes
+    // $query = str_replace(["'", '"', '`'], ['\'', '\"', '\`'], $query);
+
+    return $query;
+}
+
 // Fetch users, roles, and vaults from the database
 $queryUsers = "SELECT * FROM users";
 $resultUsers = $conn->query($queryUsers);
@@ -37,6 +70,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Perform the necessary database operations to manage user-role-vault relationships
             // For example, you can insert, update, or delete records in the vault_permissions table
             $query = "INSERT INTO vault_permissions (user_id, role_id, vault_id) VALUES ($userId, $roleId, $vaultId)";
+            $clean_query = cleanse_sql_query($query);
             $result = $conn->query($query);
 
             if (!$result) {
